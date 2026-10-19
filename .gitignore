@@ -17,6 +17,8 @@ data/raw/*
 data/processed/*
 db/*.db
 !**/.gitkeep
+!data/raw/README.md
+!data/processed/README.md
 
 # --- Logs and OS junk ---
 *.log
