@@ -43,8 +43,9 @@ Made by `src/features.py`. One row for each published video in the newest snapsh
 | `views_per_day` | views / age in days (age counted as at least 1 day) | |
 | `views_per_subscriber` | views / channel subscribers | subscribers hidden |
 | `like_view_ratio`, `comment_view_ratio` | likes or comments / views | likes or comments hidden |
-| `channel_median_views` | Median views of that channel's analyzed videos of the same format | |
-| `views_vs_channel_median` | views / `channel_median_views`. 1 = typical for the channel, 3 = triple | row not in analysis |
+| `is_sponsored` | 1 = title or description contains a common sponsorship disclosure, such as `#ad`, `#GooglePartner`, or `Sponsored by` | heuristic; misses undisclosed deals |
+| `typical_views_per_day` | Median views per day for the same channel, format and age group | fewer than 5 similar videos, or row not in analysis |
+| `performance_index` | `views_per_day` / `typical_views_per_day`. 1 = typical, 3 = three times typical | fewer than 5 similar videos, or row not in analysis |
 
 ## Filters
 | Column | Meaning |

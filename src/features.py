@@ -36,6 +36,16 @@ MIN_AGE_DAYS = 30
 AGE_BINS = [0, MIN_AGE_DAYS, 90, 180, 365, np.inf]
 AGE_LABELS = [f"0-{MIN_AGE_DAYS} days", f"{MIN_AGE_DAYS}-90 days", "90-180 days", "180-365 days", "1 year+"]
 
+# Performance index needs a fair "typical" to compare with: the median of at least
+# this many videos from the same channel, format and age group. Fewer = too noisy.
+MIN_GROUP_SIZE = 5
+
+# Sponsored / brand-deal videos. YouTube's "paid promotion" label is NOT in the API,
+# so we look for the words creators use to disclose deals. Heuristic: misses deals
+# that are not written down, and very rarely flags a video that only mentions a partner.
+SPONSOR_PATTERN = (r"#ad\b|#sponsored|sponsored by|#\w*partner\b|paid partnership"
+                   r"|in partnership with|for sponsoring|this video is sponsored")
+
 # Duration groups for "do shorter or longer videos perform better?"
 DURATION_BINS = [0, SHORT_MAX_SECONDS, 600, 1200, np.inf]
 DURATION_LABELS = ["short (<=3 min)", "3-10 min", "10-20 min", "20+ min"]
@@ -141,6 +151,8 @@ def build_features(raw):
     df["title_caps_words"] = title.map(lambda t: " ".join(caps_words(t)))  # kept so you can check it
     df["title_has_caps_word"] = (df["title_caps_words"] != "").astype(int)
     df["tag_count"] = df["tags"].map(lambda t: len(json.loads(t)) if t else 0)
+    text = df["title"] + " " + df["description"].fillna("")
+    df["is_sponsored"] = text.str.contains(SPONSOR_PATTERN, case=False, regex=True).astype(int)
 
     # 6) Fair performance metrics. Missing stays missing (NaN), never 0.
     df["views_per_day"] = (df["view_count"] / df["video_age_days"].clip(lower=1)).round(1)
@@ -156,16 +168,21 @@ def build_features(raw):
     df["exclude_reason"] = reason
     df["in_analysis"] = reason.isna().astype(int)
 
-    # 8) Performance vs the channel's own normal (used for outliers in Step 5).
-    #    1.0 = a typical video for that channel, 3.0 = three times its usual views.
-    #    Median, not mean: one viral hit would pull a mean up a lot. Shorts and long
-    #    videos are compared separately because their view counts are on different scales.
+    # 8) Performance index: views per day compared with SIMILAR videos of the SAME channel.
+    #    "Similar" = same format (short/long) and same age group, because views per day
+    #    depends on both. 1.0 = typical for that channel, 3.0 = three times its typical.
+    #    This takes channel size, format and age out of the comparison, so in Step 5
+    #    a small channel's hit counts as much as a big channel's hit.
+    #    Median, not mean: one viral video would pull a mean up a lot.
+    group = ["channel_id", "length_category", "age_group"]
     ok = df["in_analysis"] == 1
-    typical = df[ok].groupby(["channel_id", "length_category"])["view_count"].median()
-    typical = typical.rename("channel_median_views").reset_index()
-    df = df.merge(typical, on=["channel_id", "length_category"], how="left")
-    df["views_vs_channel_median"] = safe_ratio(df["view_count"], df["channel_median_views"]).where(
-        df["in_analysis"] == 1).round(3)
+    typical = (df[ok].groupby(group)["views_per_day"]
+               .agg(typical_views_per_day="median", group_size="count")
+               .reset_index())
+    typical.loc[typical["group_size"] < MIN_GROUP_SIZE, "typical_views_per_day"] = np.nan
+    df = df.merge(typical[group + ["typical_views_per_day"]], on=group, how="left")
+    df["typical_views_per_day"] = df["typical_views_per_day"].where(df["in_analysis"] == 1)
+    df["performance_index"] = safe_ratio(df["views_per_day"], df["typical_views_per_day"]).round(3)
 
     # Whole numbers with gaps: "Int64" keeps them whole (1234, not 1234.0) and allows <NA>
     for col in ["view_count", "like_count", "comment_count", "subscriber_count", "category_id",
@@ -177,12 +194,12 @@ def build_features(raw):
         "published_at", "published_at_local", "publish_date_local", "publish_dow",
         "publish_dow_num", "publish_hour", "video_age_days", "age_group",
         "duration_iso", "duration_sec", "duration_min", "length_category", "duration_bucket",
-        "was_live", "category_id", "has_captions", "tag_count",
+        "was_live", "category_id", "has_captions", "tag_count", "is_sponsored",
         "title_length", "title_word_count", "title_has_number", "title_has_question",
         "title_has_caps_word", "title_caps_words",
         "subscriber_count", "view_count", "like_count", "comment_count",
         "views_per_day", "views_per_subscriber", "like_view_ratio", "comment_view_ratio",
-        "channel_median_views", "views_vs_channel_median",
+        "typical_views_per_day", "performance_index",
         "in_analysis", "exclude_reason", "snapshot_id", "collected_at",
     ]
     return df[columns].sort_values(["channel_name", "published_at"]).reset_index(drop=True), int(upcoming.sum())
@@ -230,6 +247,9 @@ def print_summary(df, dropped):
           f"{df.loc[ok, 'title_has_question'].mean():.0%} a question mark, "
           f"{df.loc[ok, 'title_has_caps_word'].mean():.0%} an all-caps word")
     print(f"Like ratio unknown (likes hidden): {df.loc[ok, 'like_view_ratio'].isna().sum()} videos")
+    print(f"Performance index unknown (fewer than {MIN_GROUP_SIZE} similar videos to compare with): "
+          f"{df.loc[ok, 'performance_index'].isna().sum()} videos")
+    print(f"Sponsored (disclosed in title/description): {df.loc[ok, 'is_sponsored'].mean():.0%}")
 
 
 def main():
