@@ -1,0 +1,17 @@
+# Talk to the YouTube Data API v3 (plain HTTP requests)
+requests
+# Read the API key from the .env file
+python-dotenv
+# Data cleaning and analysis
+pandas
+# Time zone data (Windows has no built-in time zone database; needed for Asia/Jakarta)
+tzdata
+# Charts
+matplotlib
+seaborn
+plotly
+# Notebooks
+jupyterlab
+ipykernel
+# Dashboard
+streamlit
