@@ -62,6 +62,8 @@ Never commit this value or paste it into chat. The key should be restricted to *
 
 Cloud refreshes use about 121 quota units and are shared through the app's six-hour cache. The app has no background scheduler.
 
+The deployed dashboard is live: [Open YouTube Tech Review Trends](https://youtube-trend-analysis-l5bvfkbe8ce35rgcipobon.streamlit.app/)
+
 Dashboard filters:
 
 - Channel
