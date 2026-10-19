@@ -25,5 +25,5 @@ Free. No credit card needed. Default quota: 10,000 units per day.
 | `videos.list` | 1 unit per 50 videos | video details and stats |
 | `search.list` | **100 units** | not used |
 
-15 channels x 200 videos is about 15 x (1 + 4 + 4) = ~135 units, about 1.4% of the daily quota.
+15 channels x 200 videos = 1 channels call + 15 x 4 playlist pages + 15 x 4 video batches = 121 units, about 1.2% of the daily quota.
 Quota resets at midnight Pacific Time (about 14:00-15:00 Jakarta time).
