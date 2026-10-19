@@ -20,6 +20,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from config import DB_PATH  # noqa: E402
 from db import connect  # noqa: E402
+from features import build_features  # noqa: E402
+from cloud_data import fetch_cloud_raw  # noqa: E402
 
 
 st.set_page_config(
@@ -31,13 +33,27 @@ st.set_page_config(
 
 
 @st.cache_data(ttl=300)
-def load_features() -> pd.DataFrame:
-    """Load the saved feature table. This never calls the YouTube API."""
+def load_local_features() -> pd.DataFrame:
+    """Load the saved local feature table. This never calls the YouTube API."""
     conn = connect()
     try:
         return pd.read_sql("SELECT * FROM video_features", conn)
     finally:
         conn.close()
+
+
+@st.cache_data(ttl=6 * 60 * 60, show_spinner="Fetching a fresh YouTube snapshot...")
+def load_cloud_features() -> pd.DataFrame:
+    """Fetch and clean current public data in memory; never write API data to disk."""
+    try:
+        api_key = st.secrets["YOUTUBE_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        raise RuntimeError(
+            "YOUTUBE_API_KEY is not configured. Add it in Streamlit Cloud > Settings > Secrets."
+        )
+    raw = fetch_cloud_raw(api_key)
+    features, _ = build_features(raw)
+    return features
 
 
 def median_or_zero(values: pd.Series) -> float:
@@ -69,16 +85,26 @@ def make_hour_block(hour: pd.Series) -> pd.Series:
     )
 
 
+USE_LOCAL_DATABASE = DB_PATH.exists()
 try:
-    all_rows = load_features()
-except Exception as exc:  # pragma: no cover - shown only when local DB is absent
-    st.error("Could not open local database.")
-    st.code(str(DB_PATH))
-    st.caption("Run setup.bat, collect.bat, load_db.bat and features.bat first.")
+    if USE_LOCAL_DATABASE:
+        all_rows = load_local_features()
+        data_mode = "local SQLite snapshot"
+    else:
+        all_rows = load_cloud_features()
+        data_mode = "fresh in-memory YouTube API snapshot"
+except Exception as exc:  # pragma: no cover - shown only when data/config is absent
+    st.error("Could not load dashboard data.")
+    if USE_LOCAL_DATABASE:
+        st.code(str(DB_PATH))
+        st.caption("Run setup.bat, collect.bat, load_db.bat and features.bat first.")
+    else:
+        st.error(str(exc))
+        st.caption("Add YOUTUBE_API_KEY in Streamlit Cloud > Settings > Secrets.")
     st.stop()
 
 if all_rows.empty:
-    st.error("video_features is empty. Run features.bat first.")
+    st.error("No videos were returned for the configured channels.")
     st.stop()
 
 # The dashboard compares only stable analysis rows by default. Excluded rows remain
@@ -154,7 +180,7 @@ st.markdown(
     "**Patterns show correlation, not causation.**"
 )
 st.caption(
-    f"Local snapshot: {df['snapshot_id'].iloc[0]} · "
+    f"Data mode: {data_mode} · Snapshot: {df['snapshot_id'].iloc[0]} · "
     "Stable comparison rows only: at least 30 days old, non-live, with 5+ similar videos."
 )
 

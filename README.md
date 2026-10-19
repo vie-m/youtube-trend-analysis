@@ -31,11 +31,36 @@ After cleaning:
 
 ## Dashboard
 
-Run the local Streamlit dashboard by double-clicking:
+The dashboard has two modes:
+
+- **Local mode:** if `db/youtube.db` exists, the app reads the saved local snapshot and makes no API calls.
+- **Cloud mode:** on Streamlit Community Cloud, the database is not present because YouTube API data is excluded from Git. The app fetches current public data in memory with `YOUTUBE_API_KEY`, builds features, and caches the result for six hours. It does not write raw API data or a database to disk.
+
+### Run locally
+
+Double-click:
 
 ```text
 dashboard.bat
 ```
+
+### Deploy to Streamlit Community Cloud
+
+1. Open https://share.streamlit.io and sign in with GitHub.
+2. Click **Create app**.
+3. Repository: `vie-m/youtube-trend-analysis`.
+4. Branch: `main`.
+5. Main file path: `dashboard/app.py`.
+6. Deploy the app.
+7. Open the app's **Settings** menu > **Secrets** and add:
+
+```toml
+YOUTUBE_API_KEY = "your_key_here"
+```
+
+Never commit this value or paste it into chat. The key should be restricted to **YouTube Data API v3** in Google Cloud.
+
+Cloud refreshes use about 121 quota units and are shared through the app's six-hour cache. The app has no background scheduler.
 
 Dashboard filters:
 
@@ -54,9 +79,10 @@ Dashboard tabs:
 4. Engagement
 5. Breakouts
 
-Dashboard reads the local SQLite database. It makes **no API calls** and includes a CSV download for filtered rows.
+The dashboard includes a CSV download for filtered rows.
 
 ![Dashboard charts: upload timing and video length](reports/figures/05_upload_timing.png)
+
 
 ## Analysis charts
 
@@ -148,7 +174,8 @@ sql/schema.sql                   Database schema
 sql/analysis.sql                 Named Step 5 analysis queries
 notebooks/01_*.ipynb             Cleaning checks and decisions
 notebooks/02_analysis.ipynb      Analysis tables, charts and findings
-dashboard/app.py                 Streamlit dashboard
+dashboard/app.py                 Streamlit local/Cloud dashboard
+dashboard/cloud_data.py          In-memory Cloud API snapshot
 reports/figures/                 Saved PNG charts
 docs/data_dictionary.md          Feature definitions
 docs/results_summary.md          Compact measured-results summary
